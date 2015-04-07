@@ -2,6 +2,8 @@ package com.neuralnet.algorithm;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntConsumer;
+import java.util.stream.IntStream;
 
 import com.neuralnet.NeuralNetwork;
 import com.neuralnet.Neuron;
@@ -66,36 +68,35 @@ public class Backpropagation implements Algorithm{
 		if(outputs.size() != this.getExpectedOutput().size())
 			return 0;
 		int numOfLayers = network.getNeuronLayers().size();
-		NeuronLayer previousLayer=null;
+		
 		Double error = 0.0;
 		do{
-			for(int layerNumber = numOfLayers-1 ; layerNumber>=0;layerNumber--){
-				NeuronLayer layer = network.getNeuronLayer(layerNumber);
-				if(layer.isOutputLayer()){
-					for(int neuronIndex =0 ;neuronIndex<layer.getNeurons().size();neuronIndex++){
-						Neuron neuron = layer.getNeurons().get(neuronIndex);
-						if(neuron.isBiasNeuron())
-							continue;
-						neuron.setDelta(this.getExpectedOutput().get(neuronIndex) - neuron.getOutput() );
+			IntStream.range(numOfLayers-1, 0).parallel().forEach(new IntConsumer() {
+				NeuronLayer previousLayer=null;
+				@Override
+				public void accept(int layerNumber) {
+					NeuronLayer layer = network.getNeuronLayer(layerNumber);
+					if(layer.isOutputLayer()){
+						IntStream.range(0, layer.getNeurons().size()).filter(neuronIndex -> !layer.getNeurons().get(neuronIndex).isBiasNeuron()).parallel().forEach(neuronIndex->{
+							Neuron neuron = layer.getNeurons().get(neuronIndex);
+							neuron.setDelta(getExpectedOutput().get(neuronIndex) - neuron.getOutput() );
+						});
+						previousLayer= layer;
+						return;
 					}
-					previousLayer= layer;
-					continue;
-				}
-				else{
-					for(int neuronIndex =0 ;neuronIndex<layer.getNeurons().size();neuronIndex++){
-						Neuron neuron = layer.getNeurons().get(neuronIndex);
-						if(neuron.isBiasNeuron())
-							continue;
-						List<Double> weightForNeuronIndex = previousLayer.getWeightFromIndex(neuronIndex);
-						double deltaForNeuron = 0;
-						for(int neuronIndexPrevious =1 ; neuronIndexPrevious<previousLayer.getNeurons().size();neuronIndexPrevious++){
-							deltaForNeuron += previousLayer.getNeuron(neuronIndexPrevious).getDelta() * weightForNeuronIndex.get(neuronIndexPrevious-1); 
-						}
-						neuron.setDelta(deltaForNeuron);
+					else{
+						IntStream.range(0, layer.getNeurons().size()).parallel().filter(neuronIndex->!layer.getNeurons().get(neuronIndex).isBiasNeuron()).forEach(neuronIndex->{
+							Neuron neuron = layer.getNeurons().get(neuronIndex);
+							List<Double> weightForNeuronIndex = previousLayer.getWeightFromIndex(neuronIndex);
+							double deltaForNeuron = 0;
+							for(int neuronIndexPrevious =1 ; neuronIndexPrevious<previousLayer.getNeurons().size();neuronIndexPrevious++){
+								deltaForNeuron += previousLayer.getNeuron(neuronIndexPrevious).getDelta() * weightForNeuronIndex.get(neuronIndexPrevious-1); 
+							}
+							neuron.setDelta(deltaForNeuron);
+						});
 					}
 				}
-				
-			}
+			});
 			
 			assignNewWeights(network);
 			network.compute();
@@ -107,27 +108,21 @@ public class Backpropagation implements Algorithm{
 	}
 	
 	private void assignNewWeights(NeuralNetwork network){
-		for(int layerIndex=0;layerIndex<network.getNeuronLayers().size();layerIndex++){
+		IntStream.range(0, network.getNeuronLayers().size()).filter(layerIndex->!network.getNeuronLayer(layerIndex).isInputLayer()).forEach(layerIndex->{
 			NeuronLayer layer= network.getNeuronLayer(layerIndex);
-			if(layer.isInputLayer())
-				continue;
-			
 			NeuronLayer previousLayer = network.getNeuronLayer(layerIndex-1);
-			for(Neuron neuron : layer.getNeurons()){
-				if(neuron.isBiasNeuron())
-					continue;
+			layer.getNeurons().parallelStream().filter(neuron->!neuron.isBiasNeuron()).forEach(neuron->{
 				List<Double> weights = neuron.getWeights();
 				List<Double> newWeights = new ArrayList<Double>();
-				for(int weightIndex = 0 ;weightIndex<weights.size();weightIndex++){
+				IntStream.range(0, weights.size()).parallel().forEach(weightIndex->{
 					Neuron neuronForWeight = previousLayer.getNeuron(weightIndex);
 					Double weight = weights.get(weightIndex);
 					weight += neuronForWeight.getOutput()*this.getLearningRate()*neuron.getDelta()*neuron.computeOutput()*(1-neuron.computeOutput());
 					newWeights.add(weight);
-				}
+				});
 				neuron.setWeights(newWeights);
-			}
-			
-		}
+			});
+		});
 	}
 	
 	public Double getError(List<Double> actual, List<Double> expected) {

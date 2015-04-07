@@ -5,7 +5,11 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.neuralnet.exec.TrainingSet;
 
@@ -22,10 +26,9 @@ public class NeuralNetUtility {
 	public static WeightsFileReader getReader(int layerIndex,int neuronIndex){
 		if(readers == null)
 			return null;
-		for(WeightsFileReader reader:readers){
-			if(reader.getLayerIndex() == layerIndex && reader.getNeuronIndex()==neuronIndex)
-				return reader;
-		}
+		Optional<WeightsFileReader> findFirst = readers.stream().parallel().filter(reader->reader.getLayerIndex() == layerIndex && reader.getNeuronIndex()==neuronIndex).findFirst();
+		if(findFirst.isPresent())
+			return findFirst.get();
 		return null;
 	}
 	
@@ -33,8 +36,7 @@ public class NeuralNetUtility {
 		readers = new ArrayList<WeightsFileReader>();
 		try {
 			BufferedReader weightsFileReader = new BufferedReader(new FileReader(weightsFileName));
-			String line = null;
-			while((line =  weightsFileReader.readLine())!=null && !line.isEmpty() && !line.startsWith(Constants.COMMENT_CHARACTER)){
+			weightsFileReader.lines().parallel().filter(line->!line.isEmpty() && !line.startsWith(Constants.COMMENT_CHARACTER)).forEach(line->{
 				String []split = line.split(Constants.SEMICOLON);
 				String []weightsString = split[2].split(Constants.SPACE);
 				List<Double> weights = new ArrayList<Double>();
@@ -43,7 +45,7 @@ public class NeuralNetUtility {
 				}
 				WeightsFileReader reader = new WeightsFileReader(Integer.valueOf(split[0]), Integer.valueOf(split[1]), weights );
 				readers.add(reader);
-			}
+			});;
 			weightsFileReader.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -59,7 +61,7 @@ public class NeuralNetUtility {
 		weight = weight.replace(Constants.CURLY_BRACKET_OPEN, Constants.BLANK);
 		weight = weight.replace(Constants.CURLY_BRACKET_CLOSE, Constants.BLANK);
 		String []weights = weight.split(Constants.PIPE_CHARACTER);
-		for(String line:weights){
+		Arrays.stream(weights).parallel().forEach(line -> {
 			String []split = line.split(Constants.SEMICOLON);
 			String []weightsString = split[2].split(Constants.SPACE);
 			List<Double> weightsToAdd = new ArrayList<Double>();
@@ -68,7 +70,7 @@ public class NeuralNetUtility {
 			}
 			WeightsFileReader reader = new WeightsFileReader(Integer.valueOf(split[0]), Integer.valueOf(split[1]), weightsToAdd );
 			readers.add(reader);
-		}
+		});
 	}
 	
 	public static List<TrainingSet> getTrainingSet(String inputString) {
@@ -77,7 +79,7 @@ public class NeuralNetUtility {
 		inputString = inputString.replace(Constants.CURLY_BRACKET_CLOSE, Constants.BLANK);
 		String []inputs = inputString.split(Constants.PIPE_CHARACTER);
 		
-		for(String input:inputs){
+		Arrays.stream(inputs).parallel().forEach(input->{
 			TrainingSet set = new TrainingSet();
 			String []inputToProcess = input.split(Constants.ARROW);
 			String []trainingInputs = inputToProcess[0].split(Constants.SEMICOLON);
@@ -90,7 +92,7 @@ public class NeuralNetUtility {
 				set.getOutputs().add(Double.parseDouble(trainingOutput));
 			}
 			trainingSet.add(set);
-		}
+		});
 		return trainingSet;
 	}
 	

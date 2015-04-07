@@ -2,6 +2,7 @@ package com.neuralnet;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import com.neuralnet.utility.Constants;
 import com.neuralnet.utility.NeuralNetUtility;
@@ -31,12 +32,12 @@ public class Neuron implements NeuralNetBase{
 		super();
 		this.numInputs = numInputs;
 		this.weights = new ArrayList<Double>();
-		for(int i=0;i<this.numInputs;i++){
+		IntStream.range(0, this.numInputs).parallel().forEach(i->{
 			if(i==0)
 				this.getWeights().add(Constants.BIAS);
 			else
 				this.getWeights().add(Math.random()*10);
-		}
+		});
 	}
 	
 	public Neuron(int numInputs, List<Double> weights) {
@@ -53,10 +54,7 @@ public class Neuron implements NeuralNetBase{
 	}
 	
 	public double computeOutput(){
-		double sum=0;
-		for (Double weight : newWeights) {
-			sum += weight;
-		}
+		double sum=newWeights.parallelStream().mapToDouble(Double::doubleValue).sum();
 		return NeuralNetUtility.sigmoid(sum, Constants.RESPONSE) /*< 0.5 ? 0 : 1*/;
 	}
 	

@@ -2,6 +2,7 @@ package com.neuralnet;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import com.neuralnet.utility.NeuralNetUtility;
 import com.neuralnet.utility.WeightsFileReader;
@@ -9,7 +10,7 @@ import com.neuralnet.utility.WeightsFileReader;
 public class NeuronLayer implements NeuralNetBase{
 
 	private int numberOfNeurons;
-	List<Neuron> neurons;
+	private List<Neuron> neurons;
 	private List<Double> previousOutputs;
 
 	private boolean isInputLayer;
@@ -53,7 +54,7 @@ public class NeuronLayer implements NeuralNetBase{
 		this.numberOfNeurons = numberOfNeurons;
 		this.neurons = new ArrayList<Neuron>();
 		this.setLayerIndex(layerIndex);
-		for (int i = 0; i < this.numberOfNeurons + 1; i++) {
+		IntStream.range(0, this.numberOfNeurons + 1).forEach(i -> {
 			WeightsFileReader reader = NeuralNetUtility.getReader(this.layerIndex, i);
 			if (reader != null) {
 				Neuron e = new Neuron(numInputs, reader.getWeights());
@@ -68,19 +69,19 @@ public class NeuronLayer implements NeuralNetBase{
 				}
 				this.neurons.add(e);
 			}
-		}
+		});
 	}
 
 	public NeuronLayer(int numberOfNeurons, int numInputs, List<Double> weights) {
 		super();
 		this.numberOfNeurons = numberOfNeurons;
 		this.neurons = new ArrayList<Neuron>();
-		for (int i = 0; i < this.numberOfNeurons + 1; i++) {
+		IntStream.range(0, this.numberOfNeurons + 1).parallel().forEach(i->{
 			Neuron e = new Neuron(numInputs, weights);
 			if (i == 0)
 				e.setBiasNeuron(true);
 			this.neurons.add(e);
-		}
+		});
 	}
 
 	public NeuronLayer(int numberOfNeurons, List<Neuron> neurons) {
@@ -97,17 +98,15 @@ public class NeuronLayer implements NeuralNetBase{
 
 	public void compute() {
 
-		for (Neuron neuron : this.neurons) {
-			if (neuron.isBiasNeuron())
-				continue;
+		this.neurons.parallelStream().filter(neuron->!neuron.isBiasNeuron()).forEach(neuron->{
 			List<Double> weights = neuron.getWeights();
 			List<Double> newWeights = new ArrayList<Double>(weights.size());
-			for (int i = 0; i < weights.size(); i++) {
-			newWeights.add(weights.get(i)* this.getPreviousOutputs().get(i));
-			}
+			IntStream.range(0, weights.size()).parallel().forEach(i -> {
+				newWeights.add(weights.get(i)* this.getPreviousOutputs().get(i));
+			});
 			neuron.setNewWeights(newWeights);
 			neuron.compute();
-		}
+		});
 	}
 
 	public List<Double> getPreviousOutputs() {

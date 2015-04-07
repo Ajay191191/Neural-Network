@@ -3,6 +3,7 @@ package com.neuralnet;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import com.neuralnet.utility.NeuralNetUtility;
 
@@ -46,8 +47,7 @@ public class NeuralNetwork implements NeuralNetBase{
 	public void createNet(List<Integer> layersNodes,String weights){
 		NeuralNetUtility.readWeights(weights);
 		neuronLayers = new ArrayList<NeuronLayer>();
-		
-		for(int i=0;i<layersNodes.size();i++){
+		IntStream.range(0, layersNodes.size()).forEach(i -> {
 			NeuronLayer layer = null;
 			if(i==0){
 				layer = new NeuronLayer(layersNodes.get(i), layersNodes.get(i),i);
@@ -60,9 +60,7 @@ public class NeuralNetwork implements NeuralNetBase{
 			if(i==layersNodes.size()-1)
 				layer.setOutputLayer(true);
 			this.neuronLayers.add(layer);
-		}
-		
-		
+		});
 	}
 	
 	public void createNet(List<Integer> layersNodes, List<Double> inputs,String weightsFileName){
@@ -72,7 +70,8 @@ public class NeuralNetwork implements NeuralNetBase{
 		neuronLayers = new ArrayList<NeuronLayer>();
 		if(inputs.size() != numInputs)
 			return;
-		for(int i=0;i<layersNodes.size();i++){
+		IntStream.range(0, layersNodes.size()).forEach(i -> {
+			
 			NeuronLayer layer = null;
 			if(i==0){
 				layer = new NeuronLayer(layersNodes.get(i), layersNodes.get(i),i);
@@ -92,54 +91,48 @@ public class NeuralNetwork implements NeuralNetBase{
 			if(i==layersNodes.size()-1)
 				layer.setOutputLayer(true);
 			this.neuronLayers.add(layer);
-		}
+		});
 	}
 	
 	
 	public void compute(){
 		
-		for(int i=0;i<this.neuronLayers.size();i++){
+		IntStream.range(0, neuronLayers.size()).filter(index->!this.neuronLayers.get(index).isInputLayer()).parallel().forEach(i->{
 			NeuronLayer layer = this.neuronLayers.get(i);
-			
-			if(layer.isInputLayer())
-				continue;
 			
 			List<Double> previousOutputs = new ArrayList<Double>();
 			
 			NeuronLayer previousLayer = this.neuronLayers.get(i-1);
-			for(Neuron neuron:previousLayer.neurons){
+			
+			previousLayer.getNeurons().parallelStream().forEach(neuron->{
 				previousOutputs.add(neuron.getOutput());
-			}
+			});
 			
 			layer.setPreviousOutputs(previousOutputs);
 			layer.compute();
-		}
+		});
 		
 	}
 	
 	public List<Double> getOutput(){
 		List<Double> output = new ArrayList<Double>();
 		List<Neuron> neurons = this.neuronLayers.get(this.neuronLayers.size()-1).getNeurons();
-		for(Neuron neuron : neurons){
-			output.add(neuron.getOutput());
-		}
+		neurons.parallelStream().forEach(neuron->output.add(neuron.getOutput()));
 		return output;
 	}
 	
 	public void setInput(List<Double> inputs){
 		NeuronLayer layer = this.getInputLayer();
+		
 		if(layer.getNeurons().size() -1!= inputs.size())
 			return;
-		for(int inputIndex=0;inputIndex<inputs.size();inputIndex++){
+		IntStream.range(0, inputs.size()).parallel().forEach(inputIndex->{
 			layer.getNeuron(inputIndex+1).setOutput(inputs.get(inputIndex));
-		}
+		});
 	}
 	
 	public NeuronLayer getInputLayer(){
-		for(NeuronLayer layer : this.neuronLayers)
-			if(layer.isInputLayer())
-				return layer;
-		return null;
+		return neuronLayers.stream().parallel().filter(layer->layer.isInputLayer()).findFirst().get();
 	}
 	
 	@Override
